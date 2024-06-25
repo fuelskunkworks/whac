@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whac-A-Mole Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    #game {
+      display: none;
+    }
+
+    #scoreboard {
+      margin: 20px;
+    }
+
+    #holes {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      justify-content: center;
+      max-width: 420px; /* Adjust if necessary */
+      margin: 0 auto;
+    }
+
+    .hole {
+      width: 100%;
+      padding-top: 100%; /* 1:1 Aspect Ratio */
+      position: relative;
+      border: 1px solid black;
+    }
+
+    .hole .mole {
+      width: 80%;
+      height: 80%;
+      background-color: #9c755f;
+      border-radius: 50%;
+      position: absolute;
+      top: 10%;
+      left: 10%;
+    }
+
+    #game-over {
+      display: none;
+    }
+
+    #play-again-button {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Whac-A-Mole Game</h1>
+  <button id="start-button">Start Game</button>
+  <div id="game">
+    <div id="scoreboard">
+      <p>Score: <span id="score">0</span></p>
+      <p>Missed Clicks: <span id="missed">0</span></p>
+      <p>Highscore: <span id="highscore">0</span></p>
+    </div>
+    <div id="game-over">
+      <p>Game Over!</p>
+      <p>Final Score: <span id="final-score">0</span></p>
+    </div>
+    <button id="play-again-button">Play Again</button>
+    <div id="holes">
+      <!-- 16 holes -->
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+      <div class="hole"></div>
+    </div>
+    <ul id="top-scores"></ul>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script>
+    $(document).ready(function() {
+      const token = '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';
+      const owner = 'fuelskunkworks';
+      const repo = 'whac';
+      const path = 'highscores.json';
+
+      // Function to fetch high scores from GitHub
+      function fetchHighScores() {
+        fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+          headers: {
+            'Authorization': `token ${token}`
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          const content = atob(data.content);
+          const highScores = JSON.parse(content);
+          displayHighScores(highScores);
+        })
+        .catch(error => console.error('Error fetching high scores:', error));
+      }
+
+      // Function to display high scores
+      function displayHighScores(highScores) {
+        const topScoresList = document.getElementById('top-scores');
+        topScoresList.innerHTML = ''; // Clear previous list items
+
+        highScores.forEach(score => {
+          const listItem = document.createElement('li');
+          listItem.textContent = `${score.playerName}: ${score.score}`;
+          topScoresList.appendChild(listItem);
+        });
+      }
+
+      // Function to save high score to GitHub
+      function saveHighScore(playerName, score) {
+        fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+          headers: {
+            'Authorization': `token ${token}`
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          const content = atob(data.content);
+          const highScores = JSON.parse(content);
+          highScores.push({ playerName, score });
+          highScores.sort((a, b) => b.score - a.score);
+          const updatedContent = btoa(JSON.stringify(highScores));
+
+          return fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `token ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: 'Update high scores',
+              content: updatedContent,
+              sha: data.sha
+            })
+          });
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Failed to save high score');
+          }
+          fetchHighScores();
+        })
+        .catch(error => console.error('Error saving high score:', error));
+      }
+
+      // Function to start the game
+      function startGame() {
+        $('#start-button').hide();
+        $('#game').show();
+        $('#scoreboard').show();
+        $('#game-over').hide();
+        $('#play-again-button').hide();
+        $('#score').text('0');
+        $('#missed').text('0');
+        playGame();
+      }
+
+      // Function to handle game logic
+      function playGame() {
+        let score = 0;
+        let missedClicks = 0;
+        const maxMisses = 5;
+
+        $('.hole').on('click touchstart', function() {
+          if (!$(this).children().length) {
+            missedClicks++;
+            $('#missed').text(missedClicks);
+            if (missedClicks >= maxMisses) {
+              gameOver(score);
+            }
+          }
+        });
+
+        function showMole() {
+          const holes = $('.hole');
+          const randomHole = holes[Math.floor(Math.random() * holes.length)];
+          const moleTypes = ['mole1', 'mole2', 'mole3', 'mole4'];
+          const randomMole = moleTypes[Math.floor(Math.random() * moleTypes.length)];
+          const mole = $('<div class="mole"></div>').addClass(randomMole);
+
+          $(randomHole).append(mole);
+
+          mole.on('click touchstart', function(event) {
+            event.stopPropagation();
+            score++;
+            $('#score').text(score);
+            mole.remove();
+          });
+
+          setTimeout(() => {
+            mole.remove();
+          }, 1500);
+        }
+
+        const moleInterval = setInterval(showMole, 1500);
+
+        function gameOver(finalScore) {
+          clearInterval(moleInterval);
+          $('#final-score').text(finalScore);
+          $('#game-over').show();
+          $('#play-again-button').show();
+          saveHighScore('Player', finalScore); // Replace 'Player' with actual player name logic
+        }
+
+        $('#play-again-button').on('click', function() {
+          startGame();
+        });
+      }
+
+      $('#start-button').on('click', function() {
+        startGame();
+      });
+
+      fetchHighScores();
+    });
+  </script>
+</body>
+</html>
